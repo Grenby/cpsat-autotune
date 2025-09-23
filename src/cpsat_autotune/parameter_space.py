@@ -13,8 +13,8 @@ class CpSatParameterSpace:
     Based on empirical testing, the selection should be refined.
     """
 
-    def __init__(self):
-        self.tunable_parameters = {param.name: param for param in CPSAT_PARAMETERS}
+    def __init__(self, parameters: list[str]|None = None):
+        self.tunable_parameters = {param.name: param for param in CPSAT_PARAMETERS if (not parameters) or (param.name in parameters)}
 
     def drop_parameter(self, parameter: str):
         """

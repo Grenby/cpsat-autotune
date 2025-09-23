@@ -18,7 +18,24 @@ from .parameters import (
     IntFromOrderedListParameter,
 )
 
-CPSAT_PARAMETERS = [
+# This set is a suggestion for parameters that are likely to be important.
+# Taken from here https://cpmpy.readthedocs.io/en/latest/_modules/cpmpy/solvers/ortools.html#CPM_ortools.tunable_params
+# This is based on a discussion by the CPMPy developer with Laurent Perron in 2022. Maybe outdated, so feel free to adjust.
+CPSAT_PARAMETER_SUGGESTIONS = [
+    "optimize_with_core",
+    "search_branching",
+    "boolean_encoding_level",
+    "linearization_level",
+    "core_minimization_level",
+    "cp_model_probing_level",
+    "cp_model_presolve",
+    "clause_cleanup_ordering",
+    "binary_minimization_algorithm",
+    "minimization_algorithm",
+    "use_phase_saving",
+]
+
+CPSAT_PARAMETERS: list[CpSatParameter] = [
     # ===============================================================
     # Branching and polarity
     # ===============================================================
@@ -57,6 +74,15 @@ When enabled, the solver also bumps variables that are part of the conflict reas
 This can help the solver avoid similar conflicts in the future by prioritizing these variables in the search.
         """,
     ),
+    BoolParameter(
+        name="use_phase_saving",
+        default_value=True,
+        description="""
+When enabled, the solver remembers the last assigned value (phase) of each variable and tries to reuse it in future decisions.
+This can help the solver to quickly find solutions by reusing previously successful assignments.
+        """,
+        subsolver=False,  # Can safely be applied to all subsolvers AFAIK
+    ),
     # ===============================================================
     # Conflict analysis
     # ===============================================================
@@ -73,6 +99,20 @@ Specifies the algorithm used for binary clause minimization during conflict anal
 - `3` EXPERIMENTAL_BINARY_MINIMIZATION
 - `4` BINARY_MINIMIZATION_FIRST_WITH_TRANSITIVE_REDUCTION
         """,
+        subsolver=False,  # Can safely be applied to all subsolvers AFAIK
+    ),
+    CategoryParameter(
+        name="minimization_algorithm",
+        default_value=2,
+        values=[0, 1, 2],
+        description="""
+        Strategy for minimizing conflicts when creating them. The options are:
+        - `0` NONE
+        - `1` SIMPLE
+        - `2` RECURSIVE
+        - `3` EXPERIMENTAL (deactivated because it can lead to segfaults)
+        """,
+        subsolver=False,  # Can safely be applied to all subsolvers AFAIK
     ),
     # ===============================================================
     # Clause database management
@@ -89,9 +129,26 @@ Specifies the level of protection against clause cleanup. The options are:
 - `2` PROTECTION_LBD
         """,
     ),
+    CategoryParameter(
+        name="clause_cleanup_ordering",
+        default_value=0,
+        values=[0, 1],
+        description="""
+        Specifies which clauses are kept during a cleanup. The options are:
+        - `0` CLAUSE_ACTIVITY: Keep orders by decreasing activity.
+        - `1` CLAUSE_LBD: Keep orders by increasing LBD.
+        """,
+        subsolver=False,  # Can safely be applied to all subsolvers AFAIK
+    ),
     # ===============================================================
     # Presolve
     # ===============================================================
+    BoolParameter(
+        name="cp_model_presolve",
+        default_value=True,
+        description="Whether to do presolve on the CP-SAT model.",
+        subsolver=False,  # Presolve is done before the search
+    ),
     IntFromOrderedListParameter(
         name="presolve_bve_threshold",
         default_index=1,
@@ -116,7 +173,7 @@ More iterations can lead to a more simplified problem but at the cost of longer 
     IntFromOrderedListParameter(
         name="cp_model_probing_level",
         default_index=2,
-        values=[0, 1, 2],
+        values=[0, 1, 2, 3],
         description="""
 Defines the intensity of probing during presolve, where variables are temporarily fixed to infer more information about the problem.
 Higher levels of probing can result in a more simplified problem but require more computation time during presolve.
@@ -198,6 +255,7 @@ Defines the branching strategy the solver uses to navigate the search tree. The 
 - `8` (RANDOMIZED_SEARCH): Introduces randomization into branching decisions to diversify the search.
         """,
         is_applicable_for=has_objective,
+        subsolver=False,  # Can safely be applied to all subsolvers AFAIK
     ),
     BoolParameter(
         name="repair_hint",
@@ -250,6 +308,7 @@ This is useful in problems with tight constraints, where such focused searches c
 Use a core-based approach when trying to improve the bound.
         """,
         is_applicable_for=has_objective,
+        subsolver=False,  # Can safely be applied to all subsolvers AFAIK
     ),
     IntParameter(
         name="feasibility_jump_linearization_level",
@@ -284,6 +343,18 @@ Activates a polishing step that refines the solution found by the LP solver. Exp
         """,
     ),
     # ===============================================================
+    # Max-SAT
+    # ===============================================================
+    IntParameter(
+        name="core_minimization_level",
+        default_value=2,
+        lb=0,
+        ub=2,
+        log=False,
+        description="The higher the value, the more effort the solver will spend on minimizing unsatisfiable cores. At level 0, not effort is made, at level 1, a simple heuristic is used, at level 2, a more advanced approach is employed.",
+        subsolver=False,  # Can safely be applied to all subsolvers AFAIK
+    ),
+    # ===============================================================
     # Linear programming relaxation
     # ===============================================================
     IntFromOrderedListParameter(
@@ -299,6 +370,7 @@ Controls the extent to which integer constraints are transformed into Boolean va
 
 Increasing the linearization level can tighten the relaxation, but it also increases the complexity of the model.
         """,
+        subsolver=False,  # Can safely be applied to all subsolvers AFAIK
     ),
     BoolParameter(
         name="add_objective_cut",
@@ -308,6 +380,15 @@ Controls whether to add cuts based on the fractional objective value to the mode
 These cuts, when enabled, help narrow down the feasible region of the problem, potentially speeding up convergence to an optimal solution by eliminating non-promising areas.
         """,
         is_applicable_for=has_objective,
+    ),
+    IntParameter(
+        name="boolean_encoding_level",
+        default_value=1,
+        lb=0,
+        ub=3,
+        log=False,
+        description="Controls the eagerness to fully encode integer variables as Boolean variables. The higher the level, the more aggressive the encoding.",
+        subsolver=False,  # Can safely be applied to all subsolvers AFAIK
     ),
     IntParameter(
         name="cut_level",

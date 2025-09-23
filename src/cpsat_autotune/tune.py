@@ -1,4 +1,5 @@
 import logging
+from .cpsat_parameters import CPSAT_PARAMETER_SUGGESTIONS
 import optuna
 from ortools.sat.python import cp_model
 from .print_result import print_results
@@ -41,6 +42,7 @@ def _tune(
         n_samples_for_verification (int): The number of samples to use when verifying parameters.
         n_samples_for_trial (int): The number of samples to use for each trial.
         n_trials (int): The number of trials to execute in the tuning process. Defaults to 100.
+        parameters (list[str]): A list of parameter names to consider for tuning. If None, all parameters will be considered. By default, a predefined list of suggested parameters is used.
 
     Returns:
         MultiResult: The best parameters found during the tuning process.
@@ -105,6 +107,7 @@ def tune_time_to_optimal(
     n_samples_for_trial: int = 10,
     n_samples_for_verification: int = 30,
     n_trials: int = 100,
+    parameters: list[str] = CPSAT_PARAMETER_SUGGESTIONS
 ) -> dict:
     """
     Tune CP-SAT hyperparameters to minimize the time required to find an optimal solution.
@@ -121,13 +124,14 @@ def tune_time_to_optimal(
         n_samples_for_trial (int): The number of samples to take in each trial. Defaults to 10.
         n_samples_for_verification (int): The number of samples for verifying parameters. Defaults to 30.
         n_trials (int): The number of trials to execute in the tuning process. Defaults to 100.
+        parameters (list[str]): A list of parameter names to consider for tuning. If None, all parameters will be considered. By default, a predefined list of suggested parameters is used.
 
     Returns:
         dict: The best parameters found during the tuning process.
     """
     logger.info("Starting tuning to minimize time to optimal solution.")
 
-    parameter_space = CpSatParameterSpace()
+    parameter_space = CpSatParameterSpace(parameters)
     parameter_space.drop_parameter("use_lns_only")  # Not useful for this metric
     parameter_space.drop_parameter("max_time_in_seconds")
     parameter_space.filter_applicable_parameters([model])
@@ -160,6 +164,7 @@ def tune_for_quality_within_timelimit(
     n_samples_for_trial: int = 10,
     n_samples_for_verification: int = 30,
     n_trials: int = 100,
+    parameters: list[str] = CPSAT_PARAMETER_SUGGESTIONS
 ) -> dict:
     """
     Tune CP-SAT hyperparameters to maximize or minimize solution quality within a given time limit.
@@ -177,6 +182,7 @@ def tune_for_quality_within_timelimit(
         n_samples_for_trial (int): The number of samples to take in each trial. Defaults to 10.
         n_samples_for_verification (int): The number of samples for verifying parameters. Defaults to 30.
         n_trials (int): The number of trials to execute in the tuning process. Defaults to 100.
+        parameters (list[str]): A list of parameter names to consider for tuning. If None, all parameters will be considered. By default, a predefined list of suggested parameters is used.
 
     Returns:
         dict: The best parameters found during the tuning process.
@@ -188,7 +194,7 @@ def tune_for_quality_within_timelimit(
         "Starting tuning for quality within time limit. Direction: %s", direction
     )
 
-    parameter_space = CpSatParameterSpace()
+    parameter_space = CpSatParameterSpace(parameters)
     parameter_space.drop_parameter("max_time_in_seconds")
     parameter_space.filter_applicable_parameters([model])
     if direction == "maximize":
@@ -227,6 +233,7 @@ def tune_for_gap_within_timelimit(
     n_samples_for_verification: int = 30,
     n_trials: int = 100,
     limit: float = 10,
+    parameters: list[str] = CPSAT_PARAMETER_SUGGESTIONS
 ) -> dict:
     """
     Tune CP-SAT hyperparameters to minimize the gap within a given time limit. This is a good
@@ -248,10 +255,11 @@ def tune_for_gap_within_timelimit(
         limit (float): The limit for the gap. Defaults to 10. 10 should be a reasonable value for most cases,
         but if the solver with default parameters is not able to find a solution with that gap within the
         time limit, you should increase it.
+        parameters (list[str]): A list of parameter names to consider for tuning. If None, all parameters will be considered. By default, a predefined list of suggested parameters is used.
     """
     logger.info("Starting tuning for gap within time limit. Limit: %s", limit)
 
-    parameter_space = CpSatParameterSpace()
+    parameter_space = CpSatParameterSpace(parameters)
     parameter_space.drop_parameter("max_time_in_seconds")
     parameter_space.filter_applicable_parameters([model])
     metric = MinGapWithinTimelimit(max_time_in_seconds=max_time_in_seconds, limit=limit)
