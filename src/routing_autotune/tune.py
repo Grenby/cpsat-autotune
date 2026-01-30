@@ -4,8 +4,8 @@ from ortools.sat.python import cp_model
 from ..autotune.parameter_space import ParameterSpace
 from ..autotune import tune
 
-from .cp_sat_parameters import CPSAT_PARAMETER_SUGGESTIONS, CPSAT_PARAMETERS
-from .cp_sat_solver import CpSatSolverFactory
+from .routing_parameters import CPSAT_PARAMETER_SUGGESTIONS, CPSAT_PARAMETERS
+from .routing_solver import CpSatSolverFactory
 
 
 # Configure logging

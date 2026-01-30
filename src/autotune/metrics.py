@@ -3,8 +3,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 import random
-from typing import Iterable, Callable, TypeVar, Any
-from ortools.sat.python import cp_model
+from typing import Iterable, Callable, TypeVar, Any, Generic
+from .models import ModelSolver, SolutionStatus,GapModelSolver,GapIntervalModelSolver
 
 # Configure logging
 logging.basicConfig(
@@ -15,6 +15,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+M = TypeVar("M")
 
 
 class Comparison(Enum):
@@ -23,7 +24,7 @@ class Comparison(Enum):
     BETTER = 2
 
 
-class Metric(ABC):
+class Metric(ABC,Generic[M]):
     """
     A metric that describes how good a run of the solver was.
     The direction indicates whether higher or lower values are better.
@@ -41,8 +42,8 @@ class Metric(ABC):
     @abstractmethod
     def __call__(
         self,
-        solver: cp_model.CpSolver,
-        model: cp_model.CpModel,
+        solver: ModelSolver[M],
+        model: M,
     ) -> float:
         pass
 
@@ -100,7 +101,7 @@ class Metric(ABC):
         pass
 
 
-class MaxObjective(Metric):
+class MaxObjective(Metric[M]):
     """
     This metric tries maximize the objective value within a time limit.
     """
@@ -117,20 +118,20 @@ class MaxObjective(Metric):
 
     def __call__(
         self,
-        solver: cp_model.CpSolver,
-        model: cp_model.CpModel,
+        solver: ModelSolver[M],
+        model: M,
     ) -> float:
-        solver.parameters.random_seed = random.randint(0, 2**31 - 1)
-        solver.parameters.max_time_in_seconds = self.max_time_in_seconds
+        solver.seed = random.randint(0, 2**31 - 1)
+        solver.max_time_seconds = self.max_time_in_seconds
         logger.info(
             "Starting solver with random_seed: %s, max_time_in_seconds: %s",
-            solver.parameters.random_seed,
+            solver.seed,
             self.max_time_in_seconds,
         )
         status = solver.solve(model)
         obj_value = None
-        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            obj_value = solver.objective_value
+        if status in (SolutionStatus.OPTIMAL, SolutionStatus.FEASIBLE):
+            obj_value = solver.best_objective
             logger.info("Solver found a solution with objective value: %s", obj_value)
         else:
             logger.warning(
@@ -145,7 +146,7 @@ class MaxObjective(Metric):
         return "Objective [MAX]"
 
 
-class MinObjective(Metric):
+class MinObjective(Metric[M]):
     """
     Like MaxObjective, but tries to minimize the objective value within a time limit.
     Because the metric is supposed to be maximized, the value is negated internally.
@@ -158,11 +159,11 @@ class MinObjective(Metric):
 
     def __call__(
         self,
-        solver: cp_model.CpSolver,
-        model: cp_model.CpModel,
+        solver: ModelSolver[M],
+        model: M,
     ) -> float:
-        solver.parameters.random_seed = random.randint(0, 2**31 - 1)
-        solver.parameters.max_time_in_seconds = self.max_time_in_seconds
+        solver.seed = random.randint(0, 2**31 - 1)
+        solver.max_time_seconds = self.max_time_in_seconds
         logger.info(
             "Starting solver with random_seed: %s, max_time_in_seconds: %s",
             solver.parameters.random_seed,
@@ -170,7 +171,7 @@ class MinObjective(Metric):
         )
         status = solver.solve(model)
         obj_value = None
-        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        if status in (SolutionStatus.OPTIMAL, SolutionStatus.FEASIBLE):
             obj_value = solver.objective_value
             logger.info("Solver found a solution with objective value: %s", obj_value)
         else:
@@ -186,7 +187,7 @@ class MinObjective(Metric):
         return "Objective [MIN]"
 
 
-class MinTimeToOptimal(Metric):
+class MinTimeToOptimal(Metric[M]):
     """
     This metric minimizes the time it takes to find an optimal solution. Note that increasing the relative gap tolerance
     will actually consider all solutions with a gap of at most the given value as optimal.
@@ -207,15 +208,17 @@ class MinTimeToOptimal(Metric):
 
     def __call__(
         self,
-        solver: cp_model.CpSolver,
-        model: cp_model.CpModel,
+        solver: ModelSolver[M],
+        model: M,
     ) -> float:
-        solver.parameters.random_seed = random.randint(0, 2**31 - 1)
-        solver.parameters.max_time_in_seconds = self.max_time_in_seconds
-        if self.relative_gap_limit > 0.0:
-            solver.parameters.relative_gap_limit = self.relative_gap_limit
-        if self.absolute_gap_limit > 0.0:
-            solver.parameters.absolute_gap_limit = self.absolute_gap_limit
+        
+        solver.seed = random.randint(0, 2**31 - 1)
+        solver.max_time_seconds = self.max_time_in_seconds
+        if isinstance(solver, GapModelSolver):
+            if self.relative_gap_limit > 0.0:
+                solver.relative_gap_limit = self.relative_gap_limit
+            if self.absolute_gap_limit > 0.0:
+                solver.absolute_gap_limit = self.absolute_gap_limit
         logger.info(
             "Starting solver with random_seed: %s, max_time_in_seconds: %s, relative_gap_limit: %s, absolute_gap_limit: %s",
             solver.parameters.random_seed,
@@ -228,7 +231,7 @@ class MinTimeToOptimal(Metric):
         time_end = datetime.now()
         time_in_s = (time_end - time_begin).total_seconds()
         logger.info("Solver completed in %s seconds with status: %s", time_in_s, status)
-        if status == cp_model.OPTIMAL:
+        if status == SolutionStatus.OPTIMAL:
             return time_in_s
         else:
             logger.warning(
@@ -246,7 +249,7 @@ class MinTimeToOptimal(Metric):
         return "s"
 
 
-class MinGapWithinTimelimit(Metric):
+class MinGapWithinTimelimit(Metric[M]):
     def __init__(self, max_time_in_seconds: float, limit: float):
         super().__init__(direction="minimize")
         self.max_time_in_seconds = max_time_in_seconds
@@ -254,11 +257,12 @@ class MinGapWithinTimelimit(Metric):
 
     def __call__(
         self,
-        solver: cp_model.CpSolver,
-        model: cp_model.CpModel,
+        solver: ModelSolver[M],
+        model: M,
     ) -> float:
-        solver.parameters.random_seed = random.randint(0, 2**31 - 1)
-        solver.parameters.max_time_in_seconds = self.max_time_in_seconds
+        solver.seed = random.randint(0, 2**31 - 1)
+        solver.max_time_seconds = self.max_time_in_seconds
+        
         logger.info(
             "Starting solver with random_seed: %s, max_time_in_seconds: %s",
             solver.parameters.random_seed,
@@ -266,11 +270,11 @@ class MinGapWithinTimelimit(Metric):
         )
         status = solver.solve(model)
         obj_value = None
-        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            obj_val = solver.objective_value
-            best_bound = solver.best_objective_bound
+        if status in (SolutionStatus.OPTIMAL, SolutionStatus.FEASIBLE):
+            obj_val = solver.best_objective
+            best_bound = solver.best_bound
             gap = abs(obj_val - best_bound) / max(1, abs(obj_val))
-            obj_value = solver.objective_value
+            obj_value = solver.best_objective
             logger.info("Solver found a solution with objective value: %s", obj_value)
         else:
             gap = float("inf")
@@ -286,7 +290,8 @@ class MinGapWithinTimelimit(Metric):
         return "Relative gap"
 
 
-class MinGapIntegralWithinTimelimit(Metric):
+class MinGapIntegralWithinTimelimit(Metric[M]):
+
     def __init__(self, max_time_in_seconds: float, limit: float):
         super().__init__(direction="minimize")
         self.max_time_in_seconds = max_time_in_seconds
@@ -294,21 +299,25 @@ class MinGapIntegralWithinTimelimit(Metric):
 
     def __call__(
         self,
-        solver: cp_model.CpSolver,
-        model: cp_model.CpModel,
+        solver: ModelSolver[M],
+        model: M,
     ) -> float:
-        solver.parameters.random_seed = random.randint(0, 2**31 - 1)
-        solver.parameters.max_time_in_seconds = self.max_time_in_seconds
+        solver.seed = random.randint(0, 2**31 - 1)
+        solver.max_time_seconds = self.max_time_in_seconds
         logger.info(
             "Starting solver with random_seed: %s, max_time_in_seconds: %s",
             solver.parameters.random_seed,
             self.max_time_in_seconds,
         )
+
         status = solver.solve(model)
         obj_value = None
-        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        if status in (SolutionStatus.OPTIMAL, SolutionStatus.FEASIBLE):
             obj_value = solver.objective_value
-            gap_integral = solver.response_proto.gap_integral
+            if isinstance(solver, GapIntervalModelSolver):
+                gap_integral = solver.gap_integral
+            else:
+                gap_integral = float("inf")    
             logger.info("Solver found a solution with objective value: %s", obj_value)
         else:
             gap_integral = float("inf")

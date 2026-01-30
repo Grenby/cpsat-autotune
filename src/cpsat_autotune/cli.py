@@ -1,5 +1,5 @@
 import click
-from .model_loading import import_model
+from .cp_sat_model_loading import import_model
 from .tune import (
     tune_for_gap_within_timelimit,
     tune_time_to_optimal,

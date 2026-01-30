@@ -1,11 +1,13 @@
 import logging
-from typing import Iterable
-from ortools.sat.python import cp_model
 import optuna
-from .cpsat_parameters import CPSAT_PARAMETERS
+from typing import TypeVar, Generic, Iterable
+from .parameters import ModelParameter
 
 
-class CpSatParameterSpace:
+M = TypeVar('M')
+
+
+class ParameterSpace(Generic[M]):
     """
     Defines the hyperparameter space for the CP-SAT solver to be optimized by Optuna.
 
@@ -13,8 +15,19 @@ class CpSatParameterSpace:
     Based on empirical testing, the selection should be refined.
     """
 
-    def __init__(self, parameters: list[str]|None = None):
-        self.tunable_parameters = {param.name: param for param in CPSAT_PARAMETERS if (not parameters) or (param.name in parameters)}
+    def __init__(self, 
+                 all_parameters: list[ModelParameter[M]],
+                 parameters: list[str] | None = None
+                 ):
+        self.all_parameters=all_parameters
+        self.tunable_parameters = {param.name: param for param in all_parameters if (not parameters) or (param.name in parameters)}
+
+    def get_parameter_by_name(self, name):
+        for param in self.all_parameters:
+            if param.name == name:
+                return param
+        raise KeyError(f"Parameter '{name}' not found.")
+
 
     def drop_parameter(self, parameter: str):
         """
@@ -22,7 +35,7 @@ class CpSatParameterSpace:
         """
         self.tunable_parameters.pop(parameter, None)
 
-    def filter_applicable_parameters(self, models: Iterable[cp_model.CpModel]):
+    def filter_applicable_parameters(self, models: Iterable[M]):
         """
         Filters the parameter space to only include parameters that are applicable to the given models.
 

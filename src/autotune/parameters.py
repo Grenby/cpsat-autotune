@@ -1,26 +1,27 @@
 """
 This class provides some auxiliary classes to define the parameters that can be optimized using Optuna.
-This allows to map between the Optuna and CP-SAT parameter formats, making it easier to integrate the two frameworks.
+This allows to map between the Optuna and Model parameter formats, making it easier to integrate the two frameworks.
 It also provides more types of parameters than Optuna does out of the box, such as list parameters.
 """
 
 from abc import ABC, abstractmethod
-from ortools.sat.python import cp_model
 from typing import Callable
 import optuna
+from typing import TypeVar, Generic
 
+T = TypeVar('T')
 
-def _for_all_models(model: cp_model.CpModel) -> bool:
+def _for_all_models(model: T) -> bool:
     """
     Default filter function that returns True for all models.
     """
     return True
 
 
-class CpSatParameter(ABC):
+class ModelParameter(ABC, Generic[T]):
     """
-    Abstract base class representing a CP-SAT parameter that can be optimized using Optuna.
-    This class defines the interface for converting parameters between CP-SAT and Optuna formats,
+    Abstract base class representing a Model parameter that can be optimized using Optuna.
+    This class defines the interface for converting parameters between Model and Optuna formats,
     allowing for seamless integration between the two frameworks.
     """
 
@@ -30,7 +31,7 @@ class CpSatParameter(ABC):
         default_value,
         description: str = "",
         subsolver: bool = True,
-        is_applicable_for: Callable[[cp_model.CpModel], bool] = _for_all_models,
+        is_applicable_for: Callable[[T], bool] = _for_all_models,
     ):
         """
         Initialize the parameter with a name and default value.
@@ -67,40 +68,40 @@ class CpSatParameter(ABC):
         """
         return {self.name: self._default_value}
 
-    def get_cpsat_default(self):
+    def get_model_default(self):
         """
-        Retrieve the default value of the parameter formatted for CP-SAT.
+        Retrieve the default value of the parameter formatted for Model.
 
         Returns:
-            The default value in CP-SAT's expected format.
+            The default value in Model's expected format.
         """
         return self._default_value
 
-    def get_cpsat_params(self, optuna_params: dict) -> dict:
+    def get_model_params(self, optuna_params: dict) -> dict:
         """
-        Convert Optuna parameter values to CP-SAT parameter values.
+        Convert Optuna parameter values to Model parameter values.
 
         Args:
             optuna_params: A dictionary of parameter values suggested by Optuna.
 
         Returns:
-            A dictionary of parameter values formatted for CP-SAT.
+            A dictionary of parameter values formatted for Model.
         """
         return {self.name: optuna_params[self.name]}
 
-    def get_optuna_params(self, cpsat_params: dict) -> dict:
+    def get_optuna_params(self, model_params: dict) -> dict:
         """
-        Convert CP-SAT parameter values to Optuna parameter values.
+        Convert Model parameter values to Optuna parameter values.
 
         Args:
-            cpsat_params: A dictionary of parameter values from CP-SAT.
+            model_params: A dictionary of parameter values from Model.
 
         Returns:
             A dictionary of parameter values formatted for Optuna.
         """
-        return {self.name: cpsat_params[self.name]}
+        return {self.name: model_params[self.name]}
 
-    def is_effective_for(self, model: cp_model.CpModel) -> bool:
+    def is_effective_for(self, model: T) -> bool:
         """
         Returns true if the parameter could have an effect on solving the model.
         Will return false if it won't have any effect on solving the model.
@@ -111,12 +112,12 @@ class CpSatParameter(ABC):
         return hash(self.name)
 
     def __str__(self) -> str:
-        return f"{self.name} [default: {self.get_cpsat_default()}]"
+        return f"{self.name} [default: {self.get_model_default()}]"
 
 
-class BoolParameter(CpSatParameter):
+class BoolParameter(ModelParameter[T]):
     """
-    A CP-SAT parameter representing a boolean (True/False) value.
+    A Model parameter representing a boolean (True/False) value.
     """
 
     def __init__(
@@ -125,7 +126,7 @@ class BoolParameter(CpSatParameter):
         default_value: bool,
         description: str = "",
         subsolver: bool = True,
-        is_applicable_for: Callable[[cp_model.CpModel], bool] = _for_all_models,
+        is_applicable_for: Callable[[T], bool] = _for_all_models,
     ):
         """
         Initialize the boolean parameter with a name and default value.
@@ -155,9 +156,9 @@ class BoolParameter(CpSatParameter):
         return trial.suggest_categorical(self.name, [True, False])
 
 
-class CategoryParameter(CpSatParameter):
+class CategoryParameter(ModelParameter[T]):
     """
-    A CP-SAT parameter that can take one value from a predefined list of categorical values.
+    A Model parameter that can take one value from a predefined list of categorical values.
     The order of these values does not have semantic significance.
     """
 
@@ -168,7 +169,7 @@ class CategoryParameter(CpSatParameter):
         values: list,
         description: str = "",
         subsolver: bool = True,
-        is_applicable_for: Callable[[cp_model.CpModel], bool] = _for_all_models,
+        is_applicable_for: Callable[[T], bool] = _for_all_models,
     ):
         """
         Initialize the categorical parameter with a name, default value, and list of possible values.
@@ -202,9 +203,9 @@ class CategoryParameter(CpSatParameter):
         return trial.suggest_categorical(self.name, self.values)
 
 
-class IntParameter(CpSatParameter):
+class IntParameter(ModelParameter):
     """
-    A CP-SAT parameter representing an integer value, which may be sampled within a defined range.
+    A Model parameter representing an integer value, which may be sampled within a defined range.
     """
 
     def __init__(
@@ -216,7 +217,7 @@ class IntParameter(CpSatParameter):
         log: bool,
         description: str = "",
         subsolver: bool = True,
-        is_applicable_for: Callable[[cp_model.CpModel], bool] = _for_all_models,
+        is_applicable_for: Callable[[T], bool] = _for_all_models,
     ):
         """
         Initialize the integer parameter with a name, default value, and range bounds.
@@ -254,9 +255,9 @@ class IntParameter(CpSatParameter):
         )
 
 
-class ListParameter(CpSatParameter):
+class ListParameter(ModelParameter):
     """
-    A CP-SAT parameter representing a list of values, where a subset of these values must be selected.
+    A Model parameter representing a list of values, where a subset of these values must be selected.
     This parameter is split into multiple binary parameters in Optuna to facilitate optimization.
     """
 
@@ -267,7 +268,7 @@ class ListParameter(CpSatParameter):
         values: list,
         description: str = "",
         subsolver: bool = True,
-        is_applicable_for: Callable[[cp_model.CpModel], bool] = _for_all_models,
+        is_applicable_for: Callable[[T], bool] = _for_all_models,
     ):
         """
         Initialize the list parameter with a name, default subset, and list of possible values.
@@ -315,15 +316,15 @@ class ListParameter(CpSatParameter):
             for value in self.values
         }
 
-    def get_cpsat_params(self, optuna_params: dict) -> dict:
+    def get_model_params(self, optuna_params: dict) -> dict:
         """
-        Convert Optuna parameter values to CP-SAT format for this list parameter.
+        Convert Optuna parameter values to Model format for this list parameter.
 
         Args:
             optuna_params: A dictionary of parameter values suggested by Optuna.
 
         Returns:
-            A dictionary representing the selected subset of values in CP-SAT's format.
+            A dictionary representing the selected subset of values in Model's format.
         """
         return {
             self.name: tuple(
@@ -335,25 +336,25 @@ class ListParameter(CpSatParameter):
             )
         }
 
-    def get_optuna_params(self, cpsat_params: dict) -> dict:
+    def get_optuna_params(self, model_params: dict) -> dict:
         """
-        Convert CP-SAT parameter values to Optuna format for this list parameter.
+        Convert Model parameter values to Optuna format for this list parameter.
 
         Args:
-            cpsat_params: A dictionary of parameter values from CP-SAT.
+            model_params: A dictionary of parameter values from Model.
 
         Returns:
             A dictionary representing the selected subset of values in Optuna's format.
         """
         return {
-            f"{self.name}:{value}": value in cpsat_params[self.name]
+            f"{self.name}:{value}": value in model_params[self.name]
             for value in self.values
         }
 
 
-class IntFromOrderedListParameter(CpSatParameter):
+class IntFromOrderedListParameter(ModelParameter[T]):
     """
-    A CP-SAT parameter representing an integer value selected from an ordered list of values.
+    A Model parameter representing an integer value selected from an ordered list of values.
     The order of the values has semantic meaning, allowing Optuna to make assumptions about this ordering during optimization.
 
     Note:
@@ -367,7 +368,7 @@ class IntFromOrderedListParameter(CpSatParameter):
         values: list,
         description: str = "",
         subsolver: bool = True,
-        is_applicable_for: Callable[[cp_model.CpModel], bool] = _for_all_models,
+        is_applicable_for: Callable[[T], bool] = _for_all_models,
     ):
         """
         Initialize the parameter with a name, default index, and ordered list of possible values.
@@ -409,36 +410,36 @@ class IntFromOrderedListParameter(CpSatParameter):
         """
         return {self.name: self._default_value}
 
-    def get_cpsat_default(self):
+    def get_model_default(self):
         """
-        Retrieve the default value from the list formatted for CP-SAT.
+        Retrieve the default value from the list formatted for Model.
 
         Returns:
             The value corresponding to the default index in the ordered list.
         """
         return self.values[self._default_value]
 
-    def get_cpsat_params(self, optuna_params: dict) -> dict:
+    def get_model_params(self, optuna_params: dict) -> dict:
         """
-        Convert Optuna parameter values to CP-SAT format for this ordered list parameter.
+        Convert Optuna parameter values to Model format for this ordered list parameter.
 
         Args:
             optuna_params: A dictionary of parameter values suggested by Optuna.
 
         Returns:
-            A dictionary representing the selected value from the ordered list in CP-SAT's format.
+            A dictionary representing the selected value from the ordered list in Model's format.
         """
         return {self.name: self.values[optuna_params[self.name]]}
 
-    def get_optuna_params(self, cpsat_params: dict) -> dict:
+    def get_optuna_params(self, model_params: dict) -> dict:
         """
-        Convert CP-SAT parameter values to Optuna format for this ordered list parameter.
+        Convert Model parameter values to Optuna format for this ordered list parameter.
 
         Args:
-            cpsat_params: A dictionary of parameter values from CP-SAT.
+            model_params: A dictionary of parameter values from Model.
 
         Returns:
             A dictionary representing the index of the selected value in Optuna's format.
         """
-        value = cpsat_params[self.name]
+        value = model_params[self.name]
         return {self.name: self.values.index(value)}

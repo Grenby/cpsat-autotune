@@ -7,15 +7,17 @@ from rich.rule import Rule
 
 from .metrics import Metric
 from .caching_solver import MultiResult
-
-from .cpsat_parameters import get_parameter_by_name
-
-
+from .parameter_evaluator import EvaluationResult
+from .parameter_space import ParameterSpace
 console = Console()
 
 
 def print_results(
-    result, default_score: MultiResult, metric: Metric, fn: Callable = console.print
+    result : EvaluationResult,
+    param_space: ParameterSpace, 
+    default_score: MultiResult,
+    metric: Metric,
+    fn: Callable = console.print
 ) -> None:
     """
     Prints the evaluation results in a professional format.
@@ -36,8 +38,8 @@ def print_results(
         descriptions = []
 
         for i, (key, value) in enumerate(result.optimized_params.items(), start=1):
-            default_value = get_parameter_by_name(key).get_cpsat_default()
-            description = get_parameter_by_name(key).description.strip()
+            default_value = param_space.get_parameter_by_name(key).get_cpsat_default()
+            description = param_space.get_parameter_by_name(key).description.strip()
             contribution_value = (
                 f"{result.contribution.get(key, '<NA>'):.2%}"
                 if key in result.contribution

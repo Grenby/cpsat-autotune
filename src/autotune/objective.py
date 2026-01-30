@@ -2,7 +2,7 @@ import logging
 
 from .metrics import Comparison
 from .caching_solver import CachingScorer, MultiResult
-from .parameter_space import CpSatParameterSpace
+from .parameter_space import ParameterSpace
 import optuna
 
 # Configure logging
@@ -23,7 +23,7 @@ class OptunaCpSatStrategy:
 
     def __init__(
         self,
-        parameter_space: CpSatParameterSpace,
+        parameter_space: ParameterSpace,
         scorer: CachingScorer,
         n_samples_for_trial: int = 10,
         n_samples_for_verification: int = 30,

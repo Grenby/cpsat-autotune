@@ -1,11 +1,10 @@
 import logging
 from dataclasses import dataclass
 import numpy as np
-from ortools.sat.python import cp_model
+from typing import TypeVar
 
-from cpsat_autotune.cpsat_parameters import get_parameter_by_name
 from .metrics import Comparison, Metric
-from ortools.sat import sat_parameters_pb2
+from .models import SolverPreparator
 
 # Configure logging
 logging.basicConfig(
@@ -16,6 +15,7 @@ logging.basicConfig(
     ],
 )
 
+M = TypeVar('M')
 
 @dataclass
 class MultiResult:
@@ -68,11 +68,13 @@ class CachingScorer:
 
     def __init__(
         self,
-        model: cp_model.CpModel,
+        model: M,
         metric: Metric,
+        solver_factory: SolverPreparator[M],
         fixed_params: dict[str, float | int | bool | list | tuple] | None = None,
     ) -> None:
         self.model = model
+        self.solver_factory = solver_factory
         self.metric = metric
         self._cache: dict[frozenset, MultiResult] = {}
         self.fixed_params = (
@@ -104,37 +106,6 @@ class CachingScorer:
         }
         logging.debug("Removed fixed params: %s", cleaned_params)
         return cleaned_params
-
-    def _prepare_solver(
-        self, params: dict[str, float | int | bool | list | tuple]
-    ) -> cp_model.CpSolver:
-        solver = cp_model.CpSolver()
-        subsolver = sat_parameters_pb2.SatParameters()
-        subsolver.name = "tuned_solver"
-        has_subsolver_params = False
-        for key, value in params.items():
-            is_subsolver_param = get_parameter_by_name(key).subsolver
-            level = subsolver if is_subsolver_param else solver.parameters
-            if is_subsolver_param:
-                has_subsolver_params = True
-            if isinstance(value, (list, tuple)):
-                getattr(level, key).extend(value)
-            else:
-                setattr(level, key, value)
-        for key, value in self.fixed_params.items():
-            is_subsolver_param = get_parameter_by_name(key).subsolver
-            level = subsolver if is_subsolver_param else solver.parameters
-            if is_subsolver_param:
-                has_subsolver_params = True
-            if isinstance(value, (list, tuple)):
-                getattr(level, key).extend(value)
-            else:
-                setattr(level, key, value)
-        if has_subsolver_params:
-            solver.parameters.subsolver_params.append(subsolver)
-            solver.parameters.extra_subsolvers.append(subsolver.name)
-        logging.debug("Solver prepared with params: %s", params)
-        return solver
 
     def evaluate(
         self,
@@ -170,7 +141,7 @@ class CachingScorer:
                 return result.as_knockout_result(self.metric)
         n_missing = num_runs - len(result)
         for _ in range(n_missing):
-            solver = self._prepare_solver(params)
+            solver = self.solver_factory.prepare_solver(params)
             score = self.metric(solver, self.model)
             result.scores.append(score)
             logging.debug("Run completed with score: %s", score)

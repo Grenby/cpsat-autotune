@@ -4,14 +4,17 @@ file from OR-Tools for more information:
 https://github.com/google/or-tools/blob/stable/ortools/sat/sat_parameters.proto
 """
 
-from cpsat_autotune.model_filter import (
+from cpsat_autotune.cp_sat_model_filter import (
     AnyOf,
     has_constraint_no_overlap,
     has_constraint_no_overlap_2d,
     has_objective,
 )
-from .parameters import (
-    CpSatParameter,
+
+from ortools.sat.python import cp_model
+
+from ..autotune.parameters import (
+    ModelParameter,
     BoolParameter,
     CategoryParameter,
     IntParameter,
@@ -35,11 +38,11 @@ CPSAT_PARAMETER_SUGGESTIONS = [
     "use_phase_saving",
 ]
 
-CPSAT_PARAMETERS: list[CpSatParameter] = [
+CPSAT_PARAMETERS: list[ModelParameter[cp_model.Model]] = [
     # ===============================================================
     # Branching and polarity
     # ===============================================================
-    IntFromOrderedListParameter(
+    IntFromOrderedListParameter[cp_model.Model][cp_model.Model](
         name="preferred_variable_order",
         default_index=0,
         values=[0, 1, 2],
@@ -56,7 +59,7 @@ The search will restart frequently such that this initial order should only infl
 of the search.
         """,
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="use_erwa_heuristic",
         default_value=False,
         description="""
@@ -66,7 +69,7 @@ It considers the variable selection as an optimization problem that tries to max
 i.e., the number of learned clauses per decision.
         """,
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="also_bump_variables_in_conflict_reasons",
         default_value=False,
         description="""
@@ -74,7 +77,7 @@ When enabled, the solver also bumps variables that are part of the conflict reas
 This can help the solver avoid similar conflicts in the future by prioritizing these variables in the search.
         """,
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="use_phase_saving",
         default_value=True,
         description="""
@@ -86,7 +89,7 @@ This can help the solver to quickly find solutions by reusing previously success
     # ===============================================================
     # Conflict analysis
     # ===============================================================
-    CategoryParameter(
+    CategoryParameter[cp_model.Model](
         name="binary_minimization_algorithm",
         default_value=1,
         values=[0, 1, 2, 3, 4],
@@ -101,7 +104,7 @@ Specifies the algorithm used for binary clause minimization during conflict anal
         """,
         subsolver=False,  # Can safely be applied to all subsolvers AFAIK
     ),
-    CategoryParameter(
+    CategoryParameter[cp_model.Model](
         name="minimization_algorithm",
         default_value=2,
         values=[0, 1, 2],
@@ -117,7 +120,7 @@ Specifies the algorithm used for binary clause minimization during conflict anal
     # ===============================================================
     # Clause database management
     # ===============================================================
-    CategoryParameter(
+    CategoryParameter[cp_model.Model](
         name="clause_cleanup_protection",
         default_value=0,
         values=[0, 1, 2],
@@ -129,7 +132,7 @@ Specifies the level of protection against clause cleanup. The options are:
 - `2` PROTECTION_LBD
         """,
     ),
-    CategoryParameter(
+    CategoryParameter[cp_model.Model](
         name="clause_cleanup_ordering",
         default_value=0,
         values=[0, 1],
@@ -143,13 +146,13 @@ Specifies the level of protection against clause cleanup. The options are:
     # ===============================================================
     # Presolve
     # ===============================================================
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="cp_model_presolve",
         default_value=True,
         description="Whether to do presolve on the CP-SAT model.",
         subsolver=False,  # Presolve is done before the search
     ),
-    IntFromOrderedListParameter(
+    IntFromOrderedListParameter[cp_model.Model](
         name="presolve_bve_threshold",
         default_index=1,
         values=[100, 500, 1000],
@@ -159,7 +162,7 @@ BVE eliminates variables that can be easily solved based on their limited impact
         """,
         subsolver=False,  # Presolve is done before the search
     ),
-    IntFromOrderedListParameter(
+    IntFromOrderedListParameter[cp_model.Model](
         name="max_presolve_iterations",
         default_index=2,
         values=[1, 2, 3, 5, 10],
@@ -170,7 +173,7 @@ More iterations can lead to a more simplified problem but at the cost of longer 
         """,
         subsolver=False,  # Presolve is done before the search
     ),
-    IntFromOrderedListParameter(
+    IntFromOrderedListParameter[cp_model.Model](
         name="cp_model_probing_level",
         default_index=2,
         values=[0, 1, 2, 3],
@@ -180,7 +183,7 @@ Higher levels of probing can result in a more simplified problem but require mor
         """,
         subsolver=False,  # Presolve is done before the search
     ),
-    IntFromOrderedListParameter(
+    IntFromOrderedListParameter[cp_model.Model](
         name="presolve_probing_deterministic_time_limit",
         default_index=4,
         values=[0.1, 1.0, 5.0, 10.0, 30.0],
@@ -190,7 +193,7 @@ This parameter ensures that the presolve phase does not consume too much time, a
         """,
         subsolver=False,  # Presolve is done before the search
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         "encode_complex_linear_constraint_with_integer",
         default_value=False,
         description="""
@@ -237,7 +240,7 @@ https://github.com/google/or-tools/blob/2c333f58a37d7c75d29a58fd772c9b3f94e2ca1c
     # ===============================================================
     # Constraint programming parameters
     # ===============================================================
-    CategoryParameter(
+    CategoryParameter[cp_model.Model](
         name="search_branching",
         default_value=0,
         values=[0, 1, 2, 3, 4, 5, 6, 7, 8],
@@ -257,7 +260,7 @@ Defines the branching strategy the solver uses to navigate the search tree. The 
         is_applicable_for=has_objective,
         subsolver=False,  # Can safely be applied to all subsolvers AFAIK
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="repair_hint",
         default_value=False,
         description="""
@@ -265,7 +268,7 @@ Enables the solver to attempt to repair a solution based on a provided hint befo
 This can be useful when a good initial guess is available, helping the solver find a feasible solution more quickly.
         """,
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="use_lns_only",
         default_value=False,
         description="""
@@ -274,7 +277,7 @@ LNS is beneficial in scenarios where finding improvements quickly is more import
         """,
         subsolver=False,  # This is a top-level parameter
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="use_lb_relax_lns",
         default_value=False,
         description="""
@@ -283,7 +286,7 @@ as described in "Local Branching Relaxation Heuristics for Integer Linear Progra
 This method can help the solver explore the solution space more effectively by focusing on promising regions.
         """,
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="use_objective_lb_search",
         default_value=False,
         description="""
@@ -292,7 +295,7 @@ This approach can help direct the solver toward the most promising regions of th
         """,
         is_applicable_for=has_objective,
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="use_objective_shaving_search",
         default_value=False,
         description="""
@@ -301,7 +304,7 @@ This is useful in problems with tight constraints, where such focused searches c
         """,
         is_applicable_for=has_objective,
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="optimize_with_core",
         default_value=False,
         description="""
@@ -310,7 +313,7 @@ Use a core-based approach when trying to improve the bound.
         is_applicable_for=has_objective,
         subsolver=False,  # Can safely be applied to all subsolvers AFAIK
     ),
-    IntParameter(
+    IntParameter[cp_model.Model](
         name="feasibility_jump_linearization_level",
         default_value=2,
         lb=0,
@@ -321,7 +324,7 @@ Use a core-based approach when trying to improve the bound.
         """,
         subsolver=False,
     ),
-    CategoryParameter(
+    CategoryParameter[cp_model.Model](
         name="fp_rounding",
         default_value=2,
         values=[0, 1, 3, 2],
@@ -335,7 +338,7 @@ Specifies the rounding method used in the feasibility pump, a heuristic for quic
         """,
         subsolver=False,
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="polish_lp_solution",
         default_value=False,
         description="""
@@ -345,7 +348,7 @@ Activates a polishing step that refines the solution found by the LP solver. Exp
     # ===============================================================
     # Max-SAT
     # ===============================================================
-    IntParameter(
+    IntParameter[cp_model.Model](
         name="core_minimization_level",
         default_value=2,
         lb=0,
@@ -357,7 +360,7 @@ Activates a polishing step that refines the solution found by the LP solver. Exp
     # ===============================================================
     # Linear programming relaxation
     # ===============================================================
-    IntFromOrderedListParameter(
+    IntFromOrderedListParameter[cp_model.Model](
         name="linearization_level",
         default_index=1,
         values=[0, 1, 2],
@@ -372,7 +375,7 @@ Increasing the linearization level can tighten the relaxation, but it also incre
         """,
         subsolver=False,  # Can safely be applied to all subsolvers AFAIK
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="add_objective_cut",
         default_value=False,
         description="""
@@ -381,7 +384,7 @@ These cuts, when enabled, help narrow down the feasible region of the problem, p
         """,
         is_applicable_for=has_objective,
     ),
-    IntParameter(
+    IntParameter[cp_model.Model](
         name="boolean_encoding_level",
         default_value=1,
         lb=0,
@@ -401,7 +404,7 @@ Sets the level of effort the solver will invest in generating cutting planes, wh
 Properly applied, cuts can significantly reduce the search space and help the solver find an optimal solution more quickly.
         """,
     ),
-    IntFromOrderedListParameter(
+    IntFromOrderedListParameter[cp_model.Model](
         name="max_all_diff_cut_size",
         default_index=1,
         values=[32, 64, 128],
@@ -410,7 +413,7 @@ Limits the size of "all different" constraints used when generating cuts.
 All-different constraints ensure that a set of variables takes distinct values. This parameter controls the balance between reducing the search space and the computational cost of generating cuts.
         """,
     ),
-    IntFromOrderedListParameter(
+    IntFromOrderedListParameter[cp_model.Model](
         name="symmetry_level",
         default_index=2,
         values=[0, 1, 2],
@@ -423,7 +426,7 @@ Symmetry breaking helps reduce redundant work by avoiding the exploration of equ
 - `2`: Use both presolve and dynamic symmetry breaking during the search.
         """,
     ),
-    IntFromOrderedListParameter(
+    IntFromOrderedListParameter[cp_model.Model](
         name="num_workers",
         default_index=0,
         values=[0, 8, 4],
@@ -436,7 +439,7 @@ A value of `0` will use the number of available CPU cores.
     # ===============================================================
     # Interval constraints
     # ===============================================================
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="use_strong_propagation_in_disjunctive",
         default_value=False,
         description="""
@@ -446,7 +449,7 @@ A value of `0` will use the number of available CPU cores.
             has_constraint_no_overlap, has_constraint_no_overlap_2d
         ),
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="use_area_energetic_reasoning_in_no_overlap_2d",
         default_value=False,
         description="""
@@ -454,7 +457,7 @@ A value of `0` will use the number of available CPU cores.
         """,
         is_applicable_for=has_constraint_no_overlap_2d,
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="use_energetic_reasoning_in_no_overlap_2d",
         default_value=False,
         description="""
@@ -462,7 +465,7 @@ A value of `0` will use the number of available CPU cores.
         """,
         is_applicable_for=has_constraint_no_overlap_2d,
     ),
-    BoolParameter(
+    BoolParameter[cp_model.Model](
         name="use_timetabling_in_no_overlap_2d",
         default_value=False,
         description="""
@@ -470,7 +473,7 @@ A value of `0` will use the number of available CPU cores.
         """,
         is_applicable_for=has_constraint_no_overlap_2d,
     ),
-    IntFromOrderedListParameter(
+    IntFromOrderedListParameter[cp_model.Model](
         name="max_pairs_pairwise_reasoning_in_no_overlap_2d",
         default_index=0,
         values=[1_250, 2_500, 5_000],
@@ -482,7 +485,7 @@ A value of `0` will use the number of available CPU cores.
 ]
 
 
-def get_parameter_by_name(name: str) -> CpSatParameter:
+def get_parameter_by_name(name: str) -> ModelParameter[cp_model.CpModel]:
     """
     Returns the parameter with the given name.
     """

@@ -1,12 +1,19 @@
 import logging
-from ortools.sat.python import cp_model
-
-from ..autotune.parameter_space import ParameterSpace
-from ..autotune import tune
-
-from .cp_sat_parameters import CPSAT_PARAMETER_SUGGESTIONS, CPSAT_PARAMETERS
-from .cp_sat_solver import CpSatSolverFactory
-
+from typing import TypeVar
+import optuna
+from .models import SolverFactory
+from .print_result import print_results
+from .caching_solver import CachingScorer, MultiResult
+from .objective import OptunaCpSatStrategy
+from .metrics import (
+    Metric,
+    MinObjective,
+    MaxObjective,
+    MinTimeToOptimal,
+    MinGapWithinTimelimit,
+)
+from .parameter_space import ParameterSpace
+from .parameter_evaluator import ParameterEvaluator
 
 # Configure logging
 logging.basicConfig(
@@ -16,15 +23,103 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+M = TypeVar('M')
+
+def _tune(
+    parameter_space: ParameterSpace,
+    solver_factory: SolverFactory[M],
+    model: M,
+    metric: Metric,
+    n_samples_for_verification: int,
+    n_samples_for_trial: int,
+    n_trials: int = 100,
+) -> MultiResult:
+    """
+    Perform hyperparameter tuning using Optuna.
+
+    Args:
+        parameter_space (CpSatParameterSpace): The search space for parameters.
+        model (cp_model.CpModel): The CP-SAT model to be optimized.
+        metric (Metric): The performance metric used for evaluating the solver's results.
+        n_samples_for_verification (int): The number of samples to use when verifying parameters.
+        n_samples_for_trial (int): The number of samples to use for each trial.
+        n_trials (int): The number of trials to execute in the tuning process. Defaults to 100.
+        parameters (list[str]): A list of parameter names to consider for tuning. If None, all parameters will be considered. By default, a predefined list of suggested parameters is used.
+
+    Returns:
+        MultiResult: The best parameters found during the tuning process.
+    """
+    logger.info("Starting hyperparameter tuning with %s trials.", n_trials)
+    scorer = CachingScorer(
+        model=model,
+        metric= metric,
+        solver_factory=solver_factory
+        )
+
+    # Evaluate baseline performance using default parameters
+    default_baseline = scorer.evaluate({}, n_samples_for_verification)
+    logger.info(
+        "Baseline evaluation completed: min=%s, mean=%s, max=%s",
+        default_baseline.min(),
+        default_baseline.mean(),
+        default_baseline.max(),
+    )
+
+    # Define the objective for the tuning process
+    objective = OptunaCpSatStrategy(
+        parameter_space,
+        scorer=scorer,
+        n_samples_for_trial=n_samples_for_trial,
+        n_samples_for_verification=n_samples_for_verification,
+    )
+
+    # Initialize the study with the default parameters
+    default_params = parameter_space.get_default_params_for_optuna()
+    study = optuna.create_study(
+        direction=objective.scorer.metric.direction,
+        sampler=optuna.samplers.TPESampler(),
+    )
+    study.enqueue_trial(default_params)
+
+    # Optimize the study with the defined objective function
+    logger.info("Starting Optuna optimization.")
+    study.optimize(objective, n_trials=n_trials)
+
+    # Retrieve and log the best parameters
+    best_params = objective.best_params()
+    logger.info(
+        "Best parameters found: %s. Score: %s", best_params.params, best_params.mean()
+    )
+
+    # Evaluate the best parameters and print results
+    evaluator = ParameterEvaluator(
+        params=best_params.params,
+        scorer=scorer,
+        metric=metric,
+        n_samples_for_verification=n_samples_for_verification,
+        n_samples_for_trial=n_samples_for_trial,
+    )
+    result = evaluator.evaluate()
+    print_results(
+        result,
+        param_space=parameter_space,
+        default_score=default_baseline,
+        metric=metric
+        )
+
+    logger.info("Hyperparameter tuning completed.")
+    return best_params
+
 
 def tune_time_to_optimal(
-    model: cp_model.CpModel,
+    model: M,
+    solver_factory: SolverFactory[M],
+    parameter_space: ParameterSpace,
     max_time_in_seconds: float,
     relative_gap_limit: float = 0.0,
     n_samples_for_trial: int = 10,
     n_samples_for_verification: int = 30,
     n_trials: int = 100,
-    parameters: list[str] = CPSAT_PARAMETER_SUGGESTIONS
 ) -> dict:
     """
     Tune CP-SAT hyperparameters to minimize the time required to find an optimal solution.
@@ -48,26 +143,20 @@ def tune_time_to_optimal(
     """
     logger.info("Starting tuning to minimize time to optimal solution.")
 
-    parameter_space = ParameterSpace(
-        all_parameters=CPSAT_PARAMETERS,
-        parameters=parameters
-    )
-    parameter_space.drop_parameter("use_lns_only")  # Not useful for this metric
-    parameter_space.drop_parameter("max_time_in_seconds")
     parameter_space.filter_applicable_parameters([model])
 
-    if relative_gap_limit > 0.0:
-        parameter_space.drop_parameter("relative_gap_tolerance")
+    metric = MinTimeToOptimal(
+        max_time_in_seconds=max_time_in_seconds, relative_gap_limit=relative_gap_limit
+    )
 
-
-    result_params = tune.tune_time_to_optimal(
-        model = model,
-        solver_factory= CpSatSolverFactory(),
-        max_time_in_seconds = max_time_in_seconds,
-        relative_gap_limit = relative_gap_limit,
-        n_samples_for_trial = n_samples_for_trial,
-        n_samples_for_verification = n_samples_for_verification,
-        n_trials = n_trials,
+    result_params = _tune(
+        parameter_space=parameter_space,
+        solver_factory=solver_factory,
+        model=model,
+        metric=metric,
+        n_samples_for_verification=n_samples_for_verification,
+        n_samples_for_trial=n_samples_for_trial,
+        n_trials=n_trials,
     ).params
 
     logger.info("Tuning for time to optimal completed.")
@@ -75,14 +164,15 @@ def tune_time_to_optimal(
 
 
 def tune_for_quality_within_timelimit(
-    model: cp_model.CpModel,
+    model: M,
+    solver_factory: SolverFactory[M],
+    parameter_space: ParameterSpace,
     max_time_in_seconds: float,
     obj_for_timeout: int,
     direction: str,
     n_samples_for_trial: int = 10,
     n_samples_for_verification: int = 30,
     n_trials: int = 100,
-    parameters: list[str] = CPSAT_PARAMETER_SUGGESTIONS
 ) -> dict:
     """
     Tune CP-SAT hyperparameters to maximize or minimize solution quality within a given time limit.
@@ -112,23 +202,31 @@ def tune_for_quality_within_timelimit(
         "Starting tuning for quality within time limit. Direction: %s", direction
     )
 
-    parameter_space = ParameterSpace(
-        all_parameters=CPSAT_PARAMETERS,
-        parameters=parameters
-    )
-    parameter_space.drop_parameter("max_time_in_seconds")
     parameter_space.filter_applicable_parameters([model])
-    
-    result_params = tune.tune_for_quality_within_timelimit(
-        model= model,
-        solver_factory = CpSatSolverFactory(),
-        parameter_space = parameter_space,
-        max_time_in_seconds = max_time_in_seconds,
-        obj_for_timeout = obj_for_timeout,
-        direction = direction,
-        n_samples_for_trial = n_samples_for_trial,
-        n_samples_for_verification = n_samples_for_verification,
-        n_trials = n_trials,
+    if direction == "maximize":
+        metric = MaxObjective(
+            obj_for_timeout=obj_for_timeout, max_time_in_seconds=max_time_in_seconds
+        )
+    elif direction == "minimize":
+        metric = MinObjective(
+            obj_for_timeout=obj_for_timeout, max_time_in_seconds=max_time_in_seconds
+        )
+    else:
+        logger.error(
+            "Invalid direction '%s'. Must be 'maximize' or 'minimize'.", direction
+        )
+        raise ValueError(
+            "Invalid direction '%s'. Must be 'maximize' or 'minimize'." % direction
+        )
+
+    result_params = _tune(
+        parameter_space=parameter_space,
+        solver_factory=solver_factory,
+        model=model,
+        metric=metric,
+        n_samples_for_verification=n_samples_for_verification,
+        n_samples_for_trial=n_samples_for_trial,
+        n_trials=n_trials,
     ).params
 
     logger.info("Tuning for quality within time limit completed.")
@@ -136,13 +234,14 @@ def tune_for_quality_within_timelimit(
 
 
 def tune_for_gap_within_timelimit(
-    model: cp_model.CpModel,
+    model: M,
+    solver_factory: SolverFactory[M],
+    parameter_space: ParameterSpace,
     max_time_in_seconds: float,
     n_samples_for_trial: int = 10,
     n_samples_for_verification: int = 30,
     n_trials: int = 100,
     limit: float = 10,
-    parameters: list[str] = CPSAT_PARAMETER_SUGGESTIONS
 ) -> dict:
     """
     Tune CP-SAT hyperparameters to minimize the gap within a given time limit. This is a good
@@ -168,20 +267,14 @@ def tune_for_gap_within_timelimit(
     """
     logger.info("Starting tuning for gap within time limit. Limit: %s", limit)
 
-    parameter_space = ParameterSpace(
-        all_parameters=CPSAT_PARAMETERS,
-        parameters=parameters
-    )
-    parameter_space.drop_parameter("max_time_in_seconds")
     parameter_space.filter_applicable_parameters([model])
-    
-    return tune.tune_for_gap_within_timelimit(
-        model = model,
-        solver_factory = CpSatSolverFactory(),
-        parameter_space = parameter_space,
-        max_time_in_seconds = max_time_in_seconds,
-        n_samples_for_trial = n_samples_for_trial,
-        n_samples_for_verification = n_samples_for_verification,
-        n_trials = n_trials,
-        limit = limit,
+    metric = MinGapWithinTimelimit(max_time_in_seconds=max_time_in_seconds, limit=limit)
+    return _tune(
+        parameter_space,
+        solver_factory,
+        model,
+        metric,
+        n_samples_for_verification,
+        n_samples_for_trial,
+        n_trials,
     ).params
