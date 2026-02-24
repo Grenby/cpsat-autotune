@@ -69,7 +69,7 @@ class ParameterSpace(Generic[M]):
         params = {}
         for parameter in self.tunable_parameters.values():
             value = parameter.sample(trial)
-            default = parameter.get_cpsat_default()
+            default = parameter.get_model_default()
             if isinstance(value, (list, tuple)):
                 if set(default) != set(value):
                     params[parameter.name] = list(value)

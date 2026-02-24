@@ -203,7 +203,7 @@ class CategoryParameter(ModelParameter[T]):
         return trial.suggest_categorical(self.name, self.values)
 
 
-class IntParameter(ModelParameter):
+class IntParameter(ModelParameter[T]):
     """
     A Model parameter representing an integer value, which may be sampled within a defined range.
     """

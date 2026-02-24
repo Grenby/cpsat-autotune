@@ -166,7 +166,7 @@ class MinObjective(Metric[M]):
         solver.max_time_seconds = self.max_time_in_seconds
         logger.info(
             "Starting solver with random_seed: %s, max_time_in_seconds: %s",
-            solver.parameters.random_seed,
+            solver.seed,
             self.max_time_in_seconds,
         )
         status = solver.solve(model)
@@ -221,7 +221,7 @@ class MinTimeToOptimal(Metric[M]):
                 solver.absolute_gap_limit = self.absolute_gap_limit
         logger.info(
             "Starting solver with random_seed: %s, max_time_in_seconds: %s, relative_gap_limit: %s, absolute_gap_limit: %s",
-            solver.parameters.random_seed,
+            solver.seed,
             self.max_time_in_seconds,
             self.relative_gap_limit,
             self.absolute_gap_limit,
@@ -265,7 +265,7 @@ class MinGapWithinTimelimit(Metric[M]):
         
         logger.info(
             "Starting solver with random_seed: %s, max_time_in_seconds: %s",
-            solver.parameters.random_seed,
+            solver.seed,
             self.max_time_in_seconds,
         )
         status = solver.solve(model)
@@ -306,7 +306,7 @@ class MinGapIntegralWithinTimelimit(Metric[M]):
         solver.max_time_seconds = self.max_time_in_seconds
         logger.info(
             "Starting solver with random_seed: %s, max_time_in_seconds: %s",
-            solver.parameters.random_seed,
+            solver.seed,
             self.max_time_in_seconds,
         )
 

@@ -1,30 +1,23 @@
 import logging
 from ortools.sat.python import cp_model
 
-from ..autotune.parameter_space import ParameterSpace
-from ..autotune import tune
+from src.autotune.parameter_space import ParameterSpace
+from src.autotune import tune
 
 from .cp_sat_parameters import CPSAT_PARAMETER_SUGGESTIONS, CPSAT_PARAMETERS
 from .cp_sat_solver import CpSatSolverFactory
 
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()],
-)
 logger = logging.getLogger(__name__)
 
 
 def tune_time_to_optimal(
-    model: cp_model.CpModel,
-    max_time_in_seconds: float,
-    relative_gap_limit: float = 0.0,
-    n_samples_for_trial: int = 10,
-    n_samples_for_verification: int = 30,
-    n_trials: int = 100,
-    parameters: list[str] = CPSAT_PARAMETER_SUGGESTIONS
+        model: cp_model.CpModel,
+        max_time_in_seconds: float,
+        relative_gap_limit: float = 0.0,
+        n_samples_for_trial: int = 10,
+        n_samples_for_verification: int = 30,
+        n_trials: int = 100,
+        parameters: list[str] = CPSAT_PARAMETER_SUGGESTIONS
 ) -> dict:
     """
     Tune CP-SAT hyperparameters to minimize the time required to find an optimal solution.
@@ -59,15 +52,14 @@ def tune_time_to_optimal(
     if relative_gap_limit > 0.0:
         parameter_space.drop_parameter("relative_gap_tolerance")
 
-
     result_params = tune.tune_time_to_optimal(
-        model = model,
-        solver_factory= CpSatSolverFactory(),
-        max_time_in_seconds = max_time_in_seconds,
-        relative_gap_limit = relative_gap_limit,
-        n_samples_for_trial = n_samples_for_trial,
-        n_samples_for_verification = n_samples_for_verification,
-        n_trials = n_trials,
+        model=model,
+        solver_factory=CpSatSolverFactory(),
+        max_time_in_seconds=max_time_in_seconds,
+        relative_gap_limit=relative_gap_limit,
+        n_samples_for_trial=n_samples_for_trial,
+        n_samples_for_verification=n_samples_for_verification,
+        n_trials=n_trials,
     ).params
 
     logger.info("Tuning for time to optimal completed.")
@@ -75,14 +67,14 @@ def tune_time_to_optimal(
 
 
 def tune_for_quality_within_timelimit(
-    model: cp_model.CpModel,
-    max_time_in_seconds: float,
-    obj_for_timeout: int,
-    direction: str,
-    n_samples_for_trial: int = 10,
-    n_samples_for_verification: int = 30,
-    n_trials: int = 100,
-    parameters: list[str] = CPSAT_PARAMETER_SUGGESTIONS
+        model: cp_model.CpModel,
+        max_time_in_seconds: float,
+        obj_for_timeout: int,
+        direction: str,
+        n_samples_for_trial: int = 10,
+        n_samples_for_verification: int = 30,
+        n_trials: int = 100,
+        parameters: list[str] = CPSAT_PARAMETER_SUGGESTIONS
 ) -> dict:
     """
     Tune CP-SAT hyperparameters to maximize or minimize solution quality within a given time limit.
@@ -118,17 +110,17 @@ def tune_for_quality_within_timelimit(
     )
     parameter_space.drop_parameter("max_time_in_seconds")
     parameter_space.filter_applicable_parameters([model])
-    
+
     result_params = tune.tune_for_quality_within_timelimit(
-        model= model,
-        solver_factory = CpSatSolverFactory(),
-        parameter_space = parameter_space,
-        max_time_in_seconds = max_time_in_seconds,
-        obj_for_timeout = obj_for_timeout,
-        direction = direction,
-        n_samples_for_trial = n_samples_for_trial,
-        n_samples_for_verification = n_samples_for_verification,
-        n_trials = n_trials,
+        model=model,
+        solver_factory=CpSatSolverFactory(),
+        parameter_space=parameter_space,
+        max_time_in_seconds=max_time_in_seconds,
+        obj_for_timeout=obj_for_timeout,
+        direction=direction,
+        n_samples_for_trial=n_samples_for_trial,
+        n_samples_for_verification=n_samples_for_verification,
+        n_trials=n_trials,
     ).params
 
     logger.info("Tuning for quality within time limit completed.")
@@ -136,13 +128,13 @@ def tune_for_quality_within_timelimit(
 
 
 def tune_for_gap_within_timelimit(
-    model: cp_model.CpModel,
-    max_time_in_seconds: float,
-    n_samples_for_trial: int = 10,
-    n_samples_for_verification: int = 30,
-    n_trials: int = 100,
-    limit: float = 10,
-    parameters: list[str] = CPSAT_PARAMETER_SUGGESTIONS
+        model: cp_model.CpModel,
+        max_time_in_seconds: float,
+        n_samples_for_trial: int = 10,
+        n_samples_for_verification: int = 30,
+        n_trials: int = 100,
+        limit: float = 10,
+        parameters: list[str] = CPSAT_PARAMETER_SUGGESTIONS
 ) -> dict:
     """
     Tune CP-SAT hyperparameters to minimize the gap within a given time limit. This is a good
@@ -174,14 +166,14 @@ def tune_for_gap_within_timelimit(
     )
     parameter_space.drop_parameter("max_time_in_seconds")
     parameter_space.filter_applicable_parameters([model])
-    
+
     return tune.tune_for_gap_within_timelimit(
-        model = model,
-        solver_factory = CpSatSolverFactory(),
-        parameter_space = parameter_space,
-        max_time_in_seconds = max_time_in_seconds,
-        n_samples_for_trial = n_samples_for_trial,
-        n_samples_for_verification = n_samples_for_verification,
-        n_trials = n_trials,
-        limit = limit,
+        model=model,
+        solver_factory=CpSatSolverFactory(),
+        parameter_space=parameter_space,
+        max_time_in_seconds=max_time_in_seconds,
+        n_samples_for_trial=n_samples_for_trial,
+        n_samples_for_verification=n_samples_for_verification,
+        n_trials=n_trials,
+        limit=limit,
     ).params

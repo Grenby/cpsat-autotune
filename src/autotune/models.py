@@ -69,5 +69,8 @@ class GapIntervalModelSolver(Protocol[M]):
 
 @runtime_checkable
 class SolverFactory(Protocol[M]):
-    def prepare_solver(self, params: dict[str, float | int | bool | list | tuple]) -> ModelSolver[M]:
+    def prepare_solver(
+            self,
+            params: dict[str, float | int | bool | list | tuple]
+            ) -> ModelSolver[M]:
         pass

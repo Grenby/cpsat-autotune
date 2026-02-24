@@ -38,7 +38,7 @@ def print_results(
         descriptions = []
 
         for i, (key, value) in enumerate(result.optimized_params.items(), start=1):
-            default_value = param_space.get_parameter_by_name(key).get_cpsat_default()
+            default_value = param_space.get_parameter_by_name(key).get_model_default()
             description = param_space.get_parameter_by_name(key).description.strip()
             contribution_value = (
                 f"{result.contribution.get(key, '<NA>'):.2%}"

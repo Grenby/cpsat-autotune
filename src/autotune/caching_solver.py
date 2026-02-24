@@ -4,7 +4,7 @@ import numpy as np
 from typing import TypeVar
 
 from .metrics import Comparison, Metric
-from .models import SolverPreparator
+from .models import SolverFactory
 
 # Configure logging
 logging.basicConfig(
@@ -70,7 +70,7 @@ class CachingScorer:
         self,
         model: M,
         metric: Metric,
-        solver_factory: SolverPreparator[M],
+        solver_factory: SolverFactory[M],
         fixed_params: dict[str, float | int | bool | list | tuple] | None = None,
     ) -> None:
         self.model = model
@@ -141,7 +141,11 @@ class CachingScorer:
                 return result.as_knockout_result(self.metric)
         n_missing = num_runs - len(result)
         for _ in range(n_missing):
-            solver = self.solver_factory.prepare_solver(params)
+            
+            all_params = {k : v for k,v in params.items()}
+            all_params.update(self.fixed_params)
+
+            solver = self.solver_factory.prepare_solver(all_params)
             score = self.metric(solver, self.model)
             result.scores.append(score)
             logging.debug("Run completed with score: %s", score)
