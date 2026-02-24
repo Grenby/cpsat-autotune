@@ -20,7 +20,13 @@ classifiers = [
     "Development Status :: 3 - Alpha",
 ]
 dependencies = [
-    "optuna", "ortools", "numpy", "scipy", "rich", "click"
+    "optuna",
+    "numpy",
+    "scipy",
+    "rich",
+    "click",
+    "jupyter>=1.1.1",
+    "ortools==9.14.6206",
 ]
 
 [project.scripts]
